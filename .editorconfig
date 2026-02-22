@@ -50,7 +50,7 @@ dotnet_separate_import_directive_groups = false
 dotnet_sort_system_directives_first = true
 
 # File header
-file_header_template = Copyright (c) 2026 Logan Bussell. All rights reserved.
+file_header_template = SPDX-FileCopyrightText: Copyright (c) 2026 Logan Bussell\nSPDX-License-Identifier: MIT
 
 # this. and Me. preferences
 dotnet_style_qualification_for_event = false:silent
@@ -268,9 +268,9 @@ dotnet_naming_rule.public_static_readonly_fields_should_be_pascalcase.severity =
 dotnet_naming_rule.public_static_readonly_fields_should_be_pascalcase.symbols = public_static_readonly_fields
 dotnet_naming_rule.public_static_readonly_fields_should_be_pascalcase.style = pascalcase
 
-dotnet_naming_rule.private_static_readonly_fields_should_be_pascalcase.severity = suggestion
-dotnet_naming_rule.private_static_readonly_fields_should_be_pascalcase.symbols = private_static_readonly_fields
-dotnet_naming_rule.private_static_readonly_fields_should_be_pascalcase.style = pascalcase
+dotnet_naming_rule.private_static_readonly_fields_should_be_s_camelcase.severity = suggestion
+dotnet_naming_rule.private_static_readonly_fields_should_be_s_camelcase.symbols = private_static_readonly_fields
+dotnet_naming_rule.private_static_readonly_fields_should_be_s_camelcase.style = s_camelcase
 
 dotnet_naming_rule.enums_should_be_pascalcase.severity = suggestion
 dotnet_naming_rule.enums_should_be_pascalcase.symbols = enums
