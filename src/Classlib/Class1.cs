@@ -1,6 +1,6 @@
 ﻿namespace Classlib;
 
-public class Class1
-{
-
-}
+/// <summary>
+/// Hello, I am documented!
+/// </summary>
+public class Class1 { }
