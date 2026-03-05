@@ -25,25 +25,12 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Versioning">
-    <!-- Update version number manually. Follow https://semver.org/spec/v2.0.0.html -->
-    <SemVer>0.1.0</SemVer>
-
-    <!-- Build date in format YYYY.M.D (no leading zeros for SemVer compliance) -->
-    <BuildDate>$([System.DateTime]::Now.ToString("yyyy.M.d"))</BuildDate>
-    <PreReleaseVersionLabel>preview</PreReleaseVersionLabel>
-
-    <!-- Set this to true (usually via command line) to create a stable release version -->
-    <StableVersion>false</StableVersion>
-
-    <!-- Example CI/preview build version: 1.2.4-preview.202X.12.19 -->
-    <!-- Example stable release version: 1.2.4 (pass -p:StableVersion=true) -->
-    <PackageVersion Condition="'$(StableVersion)' == 'true'">
-      $(SemVer)
-    </PackageVersion>
-    <PackageVersion Condition="'$(StableVersion)' != 'true'">
-      $(SemVer)-$(PreReleaseVersionLabel).$(BuildDate)
-    </PackageVersion>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
+
+  <ItemGroup Label="Versioning">
+    <PackageReference Include="MinVer" PrivateAssets="All" />
+  </ItemGroup>
 
   <PropertyGroup Label="Licensing">
     <Authors>Logan Bussell</Authors>
