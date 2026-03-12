@@ -1,3 +1,4 @@
+#!/usr/bin/env dotnet
 // SPDX-FileCopyrightText: Copyright (c) 2026 Logan Bussell
 // SPDX-License-Identifier: MIT
 
@@ -6,29 +7,31 @@
 //
 // Usage: dotnet run scripts/Release.cs
 
-#:package CliWrap@3.10.0
-#:package Spectre.Console@0.54.1-alpha.0.31
+#:package LoganBussell.EasyScripting@0.3.0
 
-using System.Text;
 using System.Text.RegularExpressions;
-using CliWrap;
-using CliWrap.Buffered;
+using EasyScripting;
 using Spectre.Console;
+using static EasyScripting.CommandLine;
 
-var git = new CliWrapper("git");
-var gh = new CliWrapper("gh");
+var status = await Shell("git status --porcelain").Quiet().RunAsync();
+if (!string.IsNullOrWhiteSpace(status))
+{
+    Prompt.Error("Working tree is not clean. Commit or stash your changes first.");
+    return 1;
+}
 
 Prompt.Info("Checking GitHub CLI authentication...");
-await gh.RunAsync("auth status");
+await Shell("gh auth status").Quiet().RunAsync();
 
 // List existing tags for context
-var existingTags = await git.RunAsync("tag --list --sort=-v:refname");
-if (!string.IsNullOrWhiteSpace(existingTags.StandardOutput))
+var existingTags = await Shell("git tag --list --sort=-v:refname").Trim().Quiet().RunAsync();
+if (!string.IsNullOrWhiteSpace(existingTags))
 {
     AnsiConsole.WriteLine();
     AnsiConsole.MarkupLine("[bold]Existing tags:[/]");
-    foreach (var t in existingTags.StandardOutput.Trim().Split('\n'))
-        AnsiConsole.MarkupLine($"  [dim]{Markup.Escape(t)}[/]");
+    foreach (var existingTag in existingTags.Split('\n'))
+        AnsiConsole.MarkupLine($"- [dim]{Markup.Escape(existingTag)}[/]");
     AnsiConsole.WriteLine();
 }
 
@@ -43,86 +46,25 @@ var tag = $"v{version}";
 
 Prompt.Info($"Preparing release [green]{Markup.Escape(tag)}[/]");
 
-var statusResult = await git.RunAsync("status --porcelain");
-if (!string.IsNullOrWhiteSpace(statusResult.StandardOutput))
-{
-    Prompt.Error("Working tree is not clean. Commit or stash your changes first.");
-    return 1;
-}
-
-var tagResult = await git.RunAsync($"tag --list {tag}");
-if (!string.IsNullOrWhiteSpace(tagResult.StandardOutput))
+var tagExists = await Shell($"git tag --list {tag}").Trim().Quiet().RunAsync();
+if (!string.IsNullOrWhiteSpace(tagExists))
 {
     Prompt.Error($"Tag [green]{Markup.Escape(tag)}[/] already exists.");
     return 1;
 }
 
-await git.RunWithConfirmationAsync($"tag {tag}");
+await Shell($"git tag {tag}").Confirm().RunAsync();
 Prompt.Success($"Created tag [green]{Markup.Escape(tag)}[/]");
 
-await git.RunWithConfirmationAsync($"push origin {tag}");
+await Shell($"git push origin {tag}").Confirm().RunAsync();
 Prompt.Success($"Pushed tag [green]{Markup.Escape(tag)}[/] — publish workflow will trigger automatically.");
 
 var isPreRelease = version.Contains('-');
 var prereleaseFlag = isPreRelease ? " --prerelease" : "";
-await gh.RunWithConfirmationAsync($"release create {tag} --generate-notes{prereleaseFlag}");
+await Shell($"gh release create {tag} --generate-notes{prereleaseFlag}").Confirm().RunAsync();
 Prompt.Success($"Created GitHub Release [green]{Markup.Escape(tag)}[/]");
 
 return 0;
 
 static bool IsValidSemVer(string version) =>
     Regex.IsMatch(version, @"^\d+\.\d+\.\d+(-[0-9A-Za-z\-]+(\.[0-9A-Za-z\-]+)*)?(\+[0-9A-Za-z\-]+(\.[0-9A-Za-z\-]+)*)?$");
-
-#region Helpers
-internal class CliWrapper
-{
-    private readonly string _commandName;
-    private readonly Command _command;
-
-    public CliWrapper(string command)
-    {
-        _commandName = command;
-        var stdOutPipe = PipeTarget.ToDelegate(line => AnsiConsole.MarkupLineInterpolated($"[dim][[stdout]] {line}[/]"));
-        var stdErrPipe = PipeTarget.ToDelegate(line => AnsiConsole.MarkupLineInterpolated($"[yellow][[stderr]] {line}[/]"));
-        _command = Cli.Wrap(command)
-            .WithStandardOutputPipe(stdOutPipe)
-            .WithStandardErrorPipe(stdErrPipe)
-            .WithValidation(CommandResultValidation.ZeroExitCode);
-    }
-
-    public async Task<BufferedCommandResult> RunWithConfirmationAsync(
-        string arguments,
-        string? standardInput = null,
-        CancellationToken cancellationToken = default
-    )
-    {
-        var commandString = Markup.Escape($"{_commandName} {arguments}");
-        return !Prompt.Confirm($"Run `[blue]{commandString}[/]`?")
-            ? throw new OperationCanceledException("User aborted the operation.")
-            : await RunAsync(arguments, standardInput, cancellationToken);
-    }
-
-    public async Task<BufferedCommandResult> RunAsync(
-        string arguments,
-        string? standardInput = null,
-        CancellationToken cancellationToken = default
-    )
-    {
-        var commandString = Markup.Escape($"{_commandName} {arguments}");
-        var cmd = _command.WithArguments(arguments);
-        AnsiConsole.MarkupLineInterpolated($"[blue][[exec]] {commandString}[/]");
-        if (standardInput is not null) cmd = cmd.WithStandardInputPipe(PipeSource.FromString(standardInput));
-        return await cmd.ExecuteBufferedAsync(Encoding.UTF8, Encoding.UTF8, cancellationToken);
-    }
-}
-
-internal static class Prompt
-{
-    public static void Info(string message) => AnsiConsole.MarkupLine($"[green][[info]][/] {message}");
-    public static void Success(string message) => AnsiConsole.MarkupLine($"[green][[success]][/] {message}");
-    public static void Error(string message) => AnsiConsole.MarkupLine($"[red][[error]][/] {message}");
-    public static void Warning(string message) => AnsiConsole.MarkupLine($"[yellow][[warning]][/] {message}");
-    public static bool Confirm(string message) => AnsiConsole.Confirm($"[purple][[confirm]][/] {message}");
-    public static string Ask(string message) => AnsiConsole.Prompt(new TextPrompt<string>(message).PromptStyle("blue"));
-}
-#endregion
