@@ -4,84 +4,81 @@
 
 // Bumps the major or minor version by creating a MinVer pre-release tag.
 // This tag tells MinVer to start versioning in the new MAJOR.MINOR range.
-// See: https://github.com/adamralph/minver#can-i-bump-the-major-or-minor-version
-//
-// Usage: dotnet run scripts/BumpVersion.cs
 
 #:package LoganBussell.EasyScripting@0.3.0
 
-using System.Text.RegularExpressions;
 using EasyScripting;
+using Spectre.Console;
 using static EasyScripting.CommandLine;
 
 var status = await Shell("git status --porcelain").Quiet().RunAsync();
 if (!string.IsNullOrWhiteSpace(status))
-{
-    Prompt.Error("Working tree is not clean. Commit or stash your changes first.");
-    return 1;
-}
+    Prompt.Warning("Working tree is not clean. You may want to commit or stash your changes first.");
 
-// Find the latest version tag to determine the current version
-var latestTag = await Shell("git tag --list 'v*' --sort=-v:refname")
+// Use minver-cli to determine the current version
+var currentVersion = await Shell("dotnet minver --tag-prefix v --verbosity error")
     .Trim()
     .Quiet()
     .RunAsync();
 
-var currentMajor = 0;
-var currentMinor = 0;
+Prompt.Info($"Detected current version: {currentVersion}");
 
-if (!string.IsNullOrWhiteSpace(latestTag))
+// Parse major.minor from the current version
+var parts = currentVersion.Split('.');
+var currentMajor = int.Parse(parts[0]);
+var currentMinor = int.Parse(parts[1]);
+
+var newMinorVersion = $"{currentMajor}.{currentMinor + 1}.0";
+var newMinorTag = $"v{newMinorVersion}-alpha.0";
+
+var newMajorVersion = $"{currentMajor + 1}.0.0";
+var newMajorTag = $"v{newMajorVersion}-alpha.0";
+
+var prompt = "[blue][[choice]][/] Which version do you want to bump?";
+var bumpType = await AnsiConsole.PromptAsync(
+    new SelectionPrompt<string>()
+    .Title(prompt)
+    .AddChoices([VersionType.Minor, VersionType.Major])
+    .UseConverter(
+        choice => choice switch
+        {
+            VersionType.Minor => $"Minor version: next version will be [green]{newMinorVersion}[/]",
+            VersionType.Major => $"Major version: next version will be [green]{newMajorVersion}[/]",
+            _ => throw new InvalidOperationException("Invalid choice")
+        }
+    )
+);
+
+AnsiConsole.MarkupLine($"{prompt} [blue]{Markup.Escape(bumpType)}[/]");
+
+var (newVersion, newTag) = bumpType switch
 {
-    var firstTag = latestTag.Split('\n')[0];
-    var match = Regex.Match(firstTag, @"^v(\d+)\.(\d+)\.(\d+)");
-    if (match.Success)
-    {
-        currentMajor = int.Parse(match.Groups[1].Value);
-        currentMinor = int.Parse(match.Groups[2].Value);
-    }
+    VersionType.Minor => (newMinorVersion, newMinorTag),
+    VersionType.Major => (newMajorVersion, newMajorTag),
+    _ => throw new InvalidOperationException("Invalid choice")
+};
 
-    Prompt.Info($"Current version: {currentMajor}.{currentMinor} (from tag {firstTag})");
-}
-else
-{
-    Prompt.Info("Current version: 0.0 (no tags found)");
-}
-
-var bumpType = Prompt.Ask("Bump [green]major[/] or [green]minor[/]?");
-int newMajor;
-int newMinor;
-
-if (string.Equals(bumpType, "major", StringComparison.OrdinalIgnoreCase))
-{
-    newMajor = currentMajor + 1;
-    newMinor = 0;
-}
-else if (string.Equals(bumpType, "minor", StringComparison.OrdinalIgnoreCase))
-{
-    newMajor = currentMajor;
-    newMinor = currentMinor + 1;
-}
-else
-{
-    Prompt.Error($"Expected 'major' or 'minor', got '{bumpType}'.");
-    return 1;
-}
-
-var tag = $"v{newMajor}.{newMinor}.0-alpha.0";
-
-Prompt.Info($"New version range: {newMajor}.{newMinor} — tag: {tag}");
-
-var tagExists = await Shell($"git tag --list {tag}").Trim().Quiet().RunAsync();
+var tagExists = await Shell($"git tag --list {newTag}").Trim().Quiet().RunAsync();
 if (!string.IsNullOrWhiteSpace(tagExists))
 {
-    Prompt.Error($"Tag {tag} already exists.");
+    Prompt.Error($"Tag {newTag} already exists.");
     return 1;
 }
 
-await Shell($"git tag {tag}").Confirm().RunAsync();
-Prompt.Success($"Created tag {tag}");
+Prompt.Info($"Will create tag {newTag} to bump to version {newVersion}.");
+Prompt.Info("Future builds will use this tag to determine the version until a new release tag is created.");
+Prompt.Info("Run ./scripts/Release.cs to create a release tag for the new version when you're ready to publish it.");
 
-await Shell($"git push origin {tag}").Confirm().RunAsync();
-Prompt.Success($"Pushed tag {tag}");
+await Shell($"git tag {newTag}").Confirm().RunAsync();
+Prompt.Success($"Created tag {newTag}");
+
+await Shell($"git push origin {newTag}").Confirm().RunAsync();
+Prompt.Success($"Pushed tag {newTag}");
 
 return 0;
+
+static class VersionType
+{
+    public const string Minor = "Minor";
+    public const string Major = "Major";
+}
