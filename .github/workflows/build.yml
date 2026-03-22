@@ -75,24 +75,20 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Publish native binary
-        run: dotnet publish src/ConsoleApp -c Release -r ${{ matrix.rid }}
+        run: dotnet publish src/ConsoleApp -c Release -r ${{ matrix.rid }} -o publish
 
       - name: Package binary (tar.gz)
         if: runner.os != 'Windows'
-        run: |
-          cd src/ConsoleApp/bin/Release/net10.0/${{ matrix.rid }}/publish
-          tar -czf "$GITHUB_WORKSPACE/ConsoleApp-${{ matrix.rid }}.tar.gz" ConsoleApp
+        run: tar -czf "$GITHUB_WORKSPACE/native-${{ matrix.rid }}.tar.gz" -C publish .
 
       - name: Package binary (zip)
         if: runner.os == 'Windows'
-        run: |
-          cd src/ConsoleApp/bin/Release/net10.0/${{ matrix.rid }}/publish
-          Compress-Archive -Path ConsoleApp.exe -DestinationPath "$env:GITHUB_WORKSPACE/ConsoleApp-${{ matrix.rid }}.zip"
+        run: Compress-Archive -Path publish/* -DestinationPath "$env:GITHUB_WORKSPACE/native-${{ matrix.rid }}.zip"
         shell: pwsh
 
       # https://github.com/actions/upload-artifact/releases/tag/v6.0.0
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         name: Upload native binary
         with:
-          name: ConsoleApp-${{ matrix.rid }}
-          path: ConsoleApp-${{ matrix.rid }}.*
+          name: native-${{ matrix.rid }}
+          path: native-${{ matrix.rid }}.*
