@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+
+  <PropertyGroup Label=".NET Tool">
+    <PackAsTool>true</PackAsTool>
+    <!-- <ToolCommandName></ToolCommandName> -->
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package Metadata">
+    <!-- <PackageId></PackageId> -->
+    <!-- <Description></Description> -->
+    <!-- <PackageReleaseNotes></PackageReleaseNotes> -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- <PackageProjectUrl></PackageProjectUrl> -->
+    <!-- <RepositoryUrl></RepositoryUrl> -->
+    <RepositoryType>git</RepositoryType>
+
+    <!-- <PackageTags></PackageTags> -->
+    <!-- <PackageIcon></PackageIcon> -->
+  </PropertyGroup>
+
+  <PropertyGroup Label="Versioning">
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+  </PropertyGroup>
+
+  <ItemGroup Label="Versioning">
+    <PackageReference Include="MinVer" PrivateAssets="All" />
+  </ItemGroup>
+
+  <PropertyGroup Label="Licensing">
+    <Authors>Logan Bussell</Authors>
+    <Copyright>Copyright (c) 2026 $(Authors)</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup Label="Package Content">
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Classlib/Classlib.csproj" />
+  </ItemGroup>
+</Project>
