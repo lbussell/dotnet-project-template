@@ -8,7 +8,30 @@ on:
 permissions: {}
 
 jobs:
+  # Skip pre-release tags (e.g. v2.0.0-alpha.0 from BumpVersion)
+  check-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      is-release: ${{ steps.check.outputs.is-release }}
+    steps:
+      - name: Check if tag is a release version
+        id: check
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # Release tags are like v1.2.3 (no pre-release suffix)
+          # Bump tags are like v2.0.0-alpha.0 (with pre-release suffix)
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is-release=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "is-release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag '$TAG' is a pre-release — skipping publish."
+            echo "is-release=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: check-tag
+    if: needs.check-tag.outputs.is-release == 'true'
     uses: ./.github/workflows/build.yml
     permissions:
       contents: read
@@ -50,3 +73,29 @@ jobs:
           dotnet nuget push "packages/*.nupkg"
           --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
           --source https://api.nuget.org/v3/index.json
+
+  release:
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Download native binaries from the build workflow
+      # https://github.com/actions/download-artifact/releases/tag/v4.2.1
+      - uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        with:
+          pattern: ConsoleApp-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: List release assets
+        run: ls -la artifacts/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${{ github.ref_name }}"
+          artifacts/*
+          --repo "${{ github.repository }}"
+          --generate-notes
