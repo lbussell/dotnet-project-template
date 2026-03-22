@@ -9,12 +9,14 @@
 #:package LoganBussell.EasyScripting@0.3.0
 
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using EasyScripting;
 using Spectre.Console;
 using static EasyScripting.CommandLine;
 
 const string tagPrefix = "v";
 const string publishWorkflow = "publish-nuget.yml";
+const string publishWorkflowPath = $".github/workflows/{publishWorkflow}";
 
 await WarnIfWorkingTreeIsDirtyAsync();
 
@@ -37,6 +39,9 @@ ExecutionPlan plan;
 switch (action)
 {
     case ReleaseAction.PreRelease:
+        if (!await EnsureWorkflowIsEnabledAsync())
+            return 1;
+
         if (!TryBuildPreReleasePlan(currentVersion, out plan, out var preReleaseError))
         {
             Prompt.Error(preReleaseError);
@@ -45,6 +50,9 @@ switch (action)
         break;
 
     case ReleaseAction.Stable:
+        if (!await EnsureWorkflowIsEnabledAsync())
+            return 1;
+
         plan = BuildStableReleasePlan(currentVersion);
         break;
 
@@ -236,6 +244,58 @@ bool TryGetNextPreReleaseVersion(
     nextVersion = $"{currentVersion.StableVersion}-alpha.{nextAlphaNumber}";
     error = string.Empty;
     return true;
+}
+
+async Task<bool> EnsureWorkflowIsEnabledAsync()
+{
+    var workflowsJson = await Shell("gh workflow list --all --json path,state")
+        .Trim()
+        .Quiet()
+        .OnNonZeroExitCode(_ =>
+        {
+            Prompt.Error($"Could not inspect workflow state for {publishWorkflowPath}.");
+            Environment.Exit(1);
+        })
+        .RunAsync();
+
+    string? state;
+    try
+    {
+        using var workflows = JsonDocument.Parse(workflowsJson);
+        state = null;
+
+        foreach (var workflow in workflows.RootElement.EnumerateArray())
+        {
+            if (
+                workflow.TryGetProperty("path", out var path)
+                && path.GetString() == publishWorkflowPath
+                && workflow.TryGetProperty("state", out var workflowState)
+            )
+            {
+                state = workflowState.GetString();
+                break;
+            }
+        }
+    }
+    catch (JsonException)
+    {
+        Prompt.Error($"Could not parse workflow state for {publishWorkflowPath}.");
+        return false;
+    }
+
+    if (string.IsNullOrWhiteSpace(state))
+    {
+        Prompt.Error($"Could not find workflow {publishWorkflowPath}.");
+        return false;
+    }
+
+    if (string.Equals(state, "active", StringComparison.OrdinalIgnoreCase))
+        return true;
+
+    Prompt.Error(
+        $"Workflow {publishWorkflowPath} is {state}. Enable it with [blue]gh workflow enable {publishWorkflow}[/] before creating a release."
+    );
+    return false;
 }
 
 async Task<bool> EnsureTagCanBeCreatedAsync(string tag)
